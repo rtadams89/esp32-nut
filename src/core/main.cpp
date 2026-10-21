@@ -28,6 +28,10 @@ uint32_t boot_time_ms = 0;
 // Controlled restarts with growing delays, then degraded mode (review A7)
 RestartPolicy restart_policy;
 
+#if NUT_USB_DIAG
+void usbDiagBegin();  // src/core/usb_diag.cpp
+#endif
+
 // Manual AP mode: back to STA after 10 minutes without stations (US-064)
 ApIdleTimeout ap_timeout;
 
@@ -178,6 +182,9 @@ void setup() {
         AppLogger::log("ERROR", "[MAIN] ERROR: USBHostUPS initialization failed!");
     } else {
         AppLogger::log("INFO", "[MAIN] USBHostUPS initialized correctly.");
+#if NUT_USB_DIAG
+        usbDiagBegin();
+#endif
     }
 
     // Inizializzazione NUTServer (solo se la configurazione è valida)

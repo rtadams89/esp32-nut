@@ -150,6 +150,7 @@ Same firmware, on an ESP32-P4 board with a wired Ethernet port instead of Wi-Fi.
 - **First boot**: the board joins the LAN right away with default NUT settings (no NUT credentials, UPS name `ups`). Open the Web UI at its IP, **create the Web UI credentials immediately** (whoever does it first becomes the administrator), then set the NUT credentials in the NUT tab.
 - **Forgotten Web UI password**: double reset within 3 seconds (power the board and cut the power again within 3 s, then power it). The Web UI credentials and sessions are erased and the next visit asks to create new ones; NUT and UPS settings are kept. Until you do, anyone on the LAN can create them, so do it right away.
 - **No status LED**: the S3 DevKit NeoPixel pins are not driven on the P4.
+- **UPS not detected?** Build with `-DNUT_USB_DIAG=1`: every device the USB host enumerates (VID/PID, speed, interfaces) is logged to the System Log, or a warning every minute if none does.
 - **Other P4 boards**: override the PHY with `-DNUT_ETH_PHY_TYPE`, `-DNUT_ETH_PHY_ADDR`, `-DNUT_ETH_PHY_MDC`, `-DNUT_ETH_PHY_MDIO`, `-DNUT_ETH_PHY_POWER`, `-DNUT_ETH_CLK_MODE` in `platformio.ini`, and use `-DNUT_USB_PERIPHERAL_MAP=BIT1` for a UPS on the Full-Speed USB port.
 - **OTA**: works as on the S3. Upload the zip (or `firmware.bin`) built for your chip: an image for another chip or another P4 revision is rejected by the image check and the board keeps the running firmware.
 
