@@ -1,0 +1,130 @@
+name: Firmware
+
+# Builds every firmware target. Runs on its own for pushes and pull requests (the
+# images are attached to the run as artifacts) and is called by release.yml for tags.
+#
+#   esp32-s3-standard  ESP32-S3, Wi-Fi                     esp32-nut-<version>.zip
+#   esp32-p4-eth       ESP32-P4 silicon v3.1+, Ethernet    esp32-nut-<version>-esp32-p4.zip
+#   esp32-p4-eth-v1    ESP32-P4 silicon < v3, Ethernet     esp32-nut-<version>-esp32-p4-v1.zip
+
+on:
+  push:
+    branches:
+      - '**'
+    paths-ignore:
+      - 'docs/**'
+      - '**.md'
+  pull_request:
+  workflow_dispatch:
+  workflow_call:
+    inputs:
+      version:
+        description: 'Firmware version string (the release tag)'
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: Build ${{ matrix.env }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - env: esp32-s3-standard
+            chip: ESP32-S3
+            label: 'ESP32 NUT Server'
+            bootloader_offset: 0
+            # Same zip name as before the P4 builds: existing links keep working
+            suffix: ''
+          - env: esp32-p4-eth
+            chip: ESP32-P4
+            label: 'ESP32 NUT Server (ESP32-P4 Ethernet, rev v3.1+)'
+            bootloader_offset: 8192
+            suffix: '-esp32-p4'
+          - env: esp32-p4-eth-v1
+            chip: ESP32-P4
+            label: 'ESP32 NUT Server (ESP32-P4 Ethernet, rev < v3)'
+            bootloader_offset: 8192
+            suffix: '-esp32-p4-v1'
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v7
+
+      - name: Setup Python
+        uses: actions/setup-python@v7
+        with:
+          python-version: '3.11'
+
+      - name: Cache PlatformIO
+        uses: actions/cache@v6
+        with:
+          path: ~/.platformio
+          key: pio-${{ matrix.env }}-${{ hashFiles('platformio.ini') }}
+
+      - name: Install PlatformIO
+        run: |
+          python -m pip install --upgrade pip
+          pip install platformio
+
+      - name: Version
+        id: version
+        run: |
+          VERSION="${{ inputs.version }}"
+          if [ -z "$VERSION" ]; then VERSION="dev-${GITHUB_SHA::7}"; fi
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+
+      - name: Build firmware
+        run: pio run -e ${{ matrix.env }}
+        env:
+          PLATFORMIO_BUILD_FLAGS: '-DFIRMWARE_VERSION=\"${{ steps.version.outputs.version }}\"'
+
+      - name: Prepare Artifacts
+        run: |
+          BUILD=.pio/build/${{ matrix.env }}
+          mkdir release-pkg
+          cp $BUILD/firmware.bin release-pkg/
+          cp $BUILD/bootloader.bin release-pkg/
+          cp $BUILD/partitions.bin release-pkg/
+          # Empty otadata at 0xe000: after an odd number of OTA updates the board boots
+          # from app1, and a full flash that skips it keeps starting the old firmware
+          BOOT_APP0=$(find ~/.platformio/packages -path "*/tools/partitions/boot_app0.bin" | head -n 1)
+          if [ -z "$BOOT_APP0" ]; then echo "boot_app0.bin not found" >&2; exit 1; fi
+          cp "$BOOT_APP0" release-pkg/
+
+          # manifest.json for ESP Web Tools. The bootloader sits at 0x0 on the S3 and
+          # at 0x2000 on the P4; the rest of the layout comes from partitions.csv
+          cat <<EOF > release-pkg/manifest.json
+          {
+            "name": "${{ matrix.label }}",
+            "version": "${{ steps.version.outputs.version }}",
+            "new_install_prompt_erase": true,
+            "builds": [
+              {
+                "chipFamily": "${{ matrix.chip }}",
+                "parts": [
+                  { "path": "bootloader.bin", "offset": ${{ matrix.bootloader_offset }} },
+                  { "path": "partitions.bin", "offset": 32768 },
+                  { "path": "boot_app0.bin", "offset": 57344 },
+                  { "path": "firmware.bin", "offset": 65536 }
+                ]
+              }
+            ]
+          }
+          EOF
+
+          cd release-pkg
+          zip -r ../esp32-nut-${{ steps.version.outputs.version }}${{ matrix.suffix }}.zip *
+
+      - name: Upload firmware
+        uses: actions/upload-artifact@v7
+        with:
+          name: firmware-${{ matrix.env }}
+          path: |
+            release-pkg/
+            esp32-nut-*.zip
+          if-no-files-found: error
