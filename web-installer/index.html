@@ -27,14 +27,32 @@
                 <ol>
                     <li>Connect your ESP32 board to the computer via USB cable.</li>
                     <li>Make sure to use a data cable (not just for charging).</li>
-                    <li>Click the button below and select the serial port corresponding to your device.</li>
+                    <li>Click the button for your board below and select the serial port corresponding to your device.</li>
                 </ol>
             </div>
 
-            <div class="install-action">
-                <!-- Standard ESP Web Install Button -->
-                <esp-web-install-button manifest="manifest.json"></esp-web-install-button>
+            <!-- One firmware per board: the P4 builds use Ethernet instead of Wi-Fi, and
+                 a P4 image only boots on the silicon revision it was built for -->
+            <div class="board-choice">
+                <h3>ESP32-S3 &middot; Wi-Fi</h3>
+                <div class="install-action">
+                    <esp-web-install-button manifest="manifest.json"></esp-web-install-button>
+                </div>
             </div>
+            <div class="board-choice">
+                <h3>ESP32-P4 &middot; Ethernet (chip revision v3.1+)</h3>
+                <div class="install-action">
+                    <esp-web-install-button manifest="p4/manifest.json"></esp-web-install-button>
+                </div>
+            </div>
+            <div class="board-choice">
+                <h3>ESP32-P4 &middot; Ethernet (chip revision before v3)</h3>
+                <div class="install-action">
+                    <esp-web-install-button manifest="p4-v1/manifest.json"></esp-web-install-button>
+                </div>
+            </div>
+            <p class="board-note mono">ESP32-P4: <code>esptool.py chip_id</code> or the serial boot log
+                (&ldquo;chip revision: v1.3&rdquo;) tells the revision. An image for the wrong revision does not boot: flash the other one.</p>
             
             <div class="support-text">
                 <p class="mono">Supported browsers: Chrome, Edge, Opera.</p>

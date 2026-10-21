@@ -101,7 +101,34 @@ void setup() {
 
     // Inizializzazione di ConfigManager
     bool config_ok = config_mgr.begin() && config_mgr.isValid();
-    
+
+    web_server.setNetwork(&network_mgr);
+
+#if NUT_NET_ETHERNET
+    // Wired build: no Access Point. The network comes from DHCP, so a missing config
+    // only means "no NUT settings yet": save the defaults (empty NUT credentials,
+    // default UPS name), the same state an S3 reaches after the Wi-Fi setup
+    if (!config_ok) {
+        AppLogger::log("WARN", "[MAIN] No saved configuration: using defaults (set the NUT credentials in the Web UI)");
+        config_mgr.setNutConfig(NutConfig());
+        config_ok = config_mgr.save() && config_mgr.begin() && config_mgr.isValid();
+    }
+    // The double reset is the recovery for a lost Web UI password: it erases the Web UI
+    // credentials and sessions, and the next visit asks to create new ones (first-use
+    // setup). NUT and UPS settings are kept
+    if (manual_ap_triggered) {
+        Preferences auth_prefs;
+        if (auth_prefs.begin("web_auth", false)) {
+            auth_prefs.clear();
+            auth_prefs.end();
+        }
+        AppLogger::log("WARN", "[MAIN] Double reset: Web UI credentials and sessions erased, first-use setup required");
+    }
+    is_ap_mode = false;
+    network_mgr.begin(String(), String());
+    web_server.setUPS(&usb_ups);
+    web_server.begin(false);
+#else
     if (!config_ok || manual_ap_triggered) {
         is_ap_mode = true;
         AppLogger::log("WARN", "[MAIN] Starting in AP mode...");
@@ -130,6 +157,7 @@ void setup() {
         web_server.setUPS(&usb_ups);
         web_server.begin(false);
     }
+#endif
 
     // Inizializzazione della libreria USBHostUPS (sempre attiva)
     // "%s": messages can carry values sent by NUT clients (SET VAR, US-067)
@@ -183,6 +211,7 @@ void loop() {
     web_server.loop();
     network_mgr.loop();
 
+#if !NUT_NET_ETHERNET
     // Before the early return for an invalid config (the timer is disabled there anyway)
     if (ap_timeout.isEnabled()) {
         // The station count is read once per second: plenty for a 10 minute timeout
@@ -212,6 +241,7 @@ void loop() {
             esp_restart();
         }
     }
+#endif
     // The UPS is served by its own task (USBHostUPS::begin, review A5b)
 
     // Recupero USB esaurito: riavvio controllato dal loopTask (mai da ISR), con attese

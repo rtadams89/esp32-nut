@@ -15,6 +15,8 @@
 
 An open-source firmware for ESP32-S3 that acts as a standalone **Network UPS Tools (NUT) Server bridge** over Wi-Fi. It connects to a USB UPS (Eaton, APC, CyberPower, Powercom and more) via USB Host and exposes its data to your local network using the standard NUT protocol (port 3493) and a built-in Web Interface.
 
+An **ESP32-P4 build with wired Ethernet** (PoE boards such as the Waveshare ESP32-P4-ETH) is also available: see [ESP32-P4 Ethernet build](#-esp32-p4-ethernet-build).
+
 This allows you to easily integrate your USB-only UPS into Home Assistant, TrueNAS, Synology, or any other NUT-compatible client without needing a dedicated Raspberry Pi or PC running 24/7.
 
 ## 🌟 Features
@@ -133,6 +135,24 @@ Download the ready-to-print files from your favorite platform:
 
 Source `.3mf` models, original `.f3d` CAD files, and additional photos are available in the [`hardware/case`](hardware/case) directory.
 
+## 🔌 ESP32-P4 Ethernet build
+
+Same firmware, on an ESP32-P4 board with a wired Ethernet port instead of Wi-Fi. With a PoE module the board takes power and network from one cable.
+
+**Tested target**: Waveshare ESP32-P4-ETH (and its unbranded clones): IP101 PHY, UPS on the USB 2.0 OTG High-Speed header.
+
+- **Two P4 images**: ESP32-P4 chips before revision v3 (v1.x, early boards) and v3.1+ (current production) need different firmware built against different ESP-IDF libraries. Each image carries its revision range, so the bootloader and the OTA check refuse the wrong one. `esptool.py chip_id` or the serial boot log (`chip revision: v1.3`) tells which one you have.
+  - `esp32-nut-<version>-esp32-p4.zip`: revision v3.1 or later (PlatformIO env `esp32-p4-eth`)
+  - `esp32-nut-<version>-esp32-p4-v1.zip`: revisions before v3, e.g. v1.3 (PlatformIO env `esp32-p4-eth-v1`)
+- **Flashing**: the USB-C port is the programming port (USB-UART). Use the [web installer](https://maverick1982.github.io/esp32-nut/) (pick the P4 button for your revision) or the zip with `esptool.py`: the bootloader goes at `0x2000` on the P4 (`0x0` on the S3); partitions `0x8000`, `boot_app0.bin` `0xe000`, firmware `0x10000`.
+- **UPS connection**: the UPS plugs into the USB 2.0 OTG header (the 4-pin header on the Waveshare board; check its pinout on your board before wiring). The board must supply 5V on that header to power the UPS USB interface: check your board, or use a powered adapter. Low- and full-speed HID UPS devices work on the High-Speed port.
+- **Network**: DHCP on Ethernet, hostname `esp32-nut-xxxxxx` (last 3 bytes of the MAC). There is no Access Point and no Wi-Fi tab; the sidebar shows `Ethernet: <IP> (100 Mbps)`.
+- **First boot**: the board joins the LAN right away with default NUT settings (no NUT credentials, UPS name `ups`). Open the Web UI at its IP, **create the Web UI credentials immediately** (whoever does it first becomes the administrator), then set the NUT credentials in the NUT tab.
+- **Forgotten Web UI password**: double reset within 3 seconds (power the board and cut the power again within 3 s, then power it). The Web UI credentials and sessions are erased and the next visit asks to create new ones; NUT and UPS settings are kept. Until you do, anyone on the LAN can create them, so do it right away.
+- **No status LED**: the S3 DevKit NeoPixel pins are not driven on the P4.
+- **Other P4 boards**: override the PHY with `-DNUT_ETH_PHY_TYPE`, `-DNUT_ETH_PHY_ADDR`, `-DNUT_ETH_PHY_MDC`, `-DNUT_ETH_PHY_MDIO`, `-DNUT_ETH_PHY_POWER`, `-DNUT_ETH_CLK_MODE` in `platformio.ini`, and use `-DNUT_USB_PERIPHERAL_MAP=BIT1` for a UPS on the Full-Speed USB port.
+- **OTA**: works as on the S3. Upload the zip (or `firmware.bin`) built for your chip: an image for another chip or another P4 revision is rejected by the image check and the board keeps the running firmware.
+
 ## 🚀 Getting Started
 
 ### 1. Flashing the Firmware
@@ -145,7 +165,7 @@ You can install the firmware directly from your browser without downloading any 
 1. Clone this repository.
 2. Open the project folder in VSCode with the PlatformIO extension.
 3. Connect your ESP32-S3 to your PC (using the UART/UART-Prog USB port).
-4. Click **Build** and then **Upload**.
+4. Click **Build** and then **Upload**. The default environment is `esp32-s3-standard`; for the ESP32-P4 Ethernet build pick `esp32-p4-eth` or `esp32-p4-eth-v1` (see above).
 
 ### 2. First Boot & Configuration
 1. On first boot (or if no valid Wi-Fi configuration is saved), the ESP32 will create an Access Point named **`NUT_ESP32_Config`** (Password: `12345678`).

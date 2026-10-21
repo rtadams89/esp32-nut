@@ -19,12 +19,22 @@ DiagnosticLED::DiagnosticLED()
 
 void DiagnosticLED::setPixelColorAndShow(uint32_t color) {
     _currentColor = color;
+#if !DIAG_LED_DISABLED
     _pixels.setPixelColor(0, color);
     _pixels.show();
+#endif
 }
 
 void DiagnosticLED::begin(uint8_t pin) {
     _pin = pin;
+
+#if DIAG_LED_DISABLED
+    // Board without the S3 DevKit NeoPixel: the states are tracked, no pin is touched
+    _ledOn = false;
+    _state = CONNECTING;
+    _previousMillis = millis();
+    return;
+#endif
 
     // Assicurati che l'alimentazione del NeoPixel sia attiva
     pinMode(NEOPIXEL_POWER_PIN, OUTPUT);

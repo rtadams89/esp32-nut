@@ -9,14 +9,17 @@ test.describe('ESP Web Installer', () => {
     
     await page.goto(indexPath);
     
-    // Verifica che il bottone sia presente
-    const installButton = page.locator('esp-web-install-button');
-    await expect(installButton).toBeAttached();
+    // Un bottone per firmware: ESP32-S3 (Wi-Fi) alla radice, i due ESP32-P4 (Ethernet)
+    // nelle cartelle create da release.yml
+    const installButtons = page.locator('esp-web-install-button');
+    await expect(installButtons).toHaveCount(3);
     // Non testiamo toBeVisible() perchè il custom element web-install-button 
     // ha una sua logica shadow DOM e potrebbe richiedere script asincroni
     
     // Verifica dell'attributo manifest
-    await expect(installButton).toHaveAttribute('manifest', 'manifest.json');
+    await expect(installButtons.nth(0)).toHaveAttribute('manifest', 'manifest.json');
+    await expect(installButtons.nth(1)).toHaveAttribute('manifest', 'p4/manifest.json');
+    await expect(installButtons.nth(2)).toHaveAttribute('manifest', 'p4-v1/manifest.json');
   });
 
   test('manifest.json is valid and contains correct offsets', () => {

@@ -70,6 +70,7 @@ static void readCoreDumpSummary() {
         s_crash_task = String(summary->exc_task);
         s_crash_pc = summary->exc_pc;
         s_crash_backtrace = "";
+#if defined(__XTENSA__)
         for (uint32_t i = 0; i < summary->exc_bt_info.depth && i < 16; i++) {
             char addr[12];
             snprintf(addr, sizeof(addr), "0x%08lx", (unsigned long)summary->exc_bt_info.bt[i]);
@@ -77,6 +78,15 @@ static void readCoreDumpSummary() {
             s_crash_backtrace += addr;
         }
         if (summary->exc_bt_info.corrupted) s_crash_backtrace += " |<-CORRUPTED";
+#else
+        // RISC-V (ESP32-P4): no on-device backtrace, only a stack dump. PC, return
+        // address and trap cause are enough to locate the crash with addr2line
+        char regs[64];
+        snprintf(regs, sizeof(regs), "0x%08lx RA:0x%08lx MCAUSE:0x%08lx",
+                 (unsigned long)summary->exc_pc, (unsigned long)summary->ex_info.ra,
+                 (unsigned long)summary->ex_info.mcause);
+        s_crash_backtrace = regs;
+#endif
     }
     free(summary);
 #endif

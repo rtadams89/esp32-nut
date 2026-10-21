@@ -5,8 +5,16 @@
 #include <Adafruit_NeoPixel.h>
 
 // Pin predefinito per il LED integrato della ESP32-S3-DevKitC-1
+#ifndef LED_BUILTIN_PIN
 #define LED_BUILTIN_PIN 48
+#endif
+#ifndef NEOPIXEL_POWER_PIN
 #define NEOPIXEL_POWER_PIN 38
+#endif
+// -DDIAG_LED_DISABLED=1: boards without that LED (ESP32-P4), GPIO 38/48 never driven
+#ifndef DIAG_LED_DISABLED
+#define DIAG_LED_DISABLED 0
+#endif
 
 // Costanti per i periodi di lampeggio (millisecondi)
 static const unsigned long LED_BLINK_SLOW_MS = 1000;  // Lampeggio lento (CONNECTING)

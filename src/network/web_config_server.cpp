@@ -3,7 +3,7 @@
 #include "AuthService.h"
 #include "CommandCatalog.h"
 #include "network/web_config_server.h"
-#include <WiFi.h>
+#include "network/network_manager.h"
 #include <ArduinoJson.h>
 #include "core/app_logger.h"
 #include "core/crash_diag.h"
@@ -56,11 +56,13 @@ void WebConfigServer::begin(bool isAPMode) {
         AppLogger::log("INFO", "[AUTH] Persistent sessions restored: %u", (unsigned)sessions.persistentCount());
     }
     
+#if !NUT_NET_ETHERNET
     if (is_ap_mode) {
         // Start DNS Server for Captive Portal
         dnsServer.setErrorReplyCode(DNSReplyCode::NoError);
         dnsServer.start(53, "*", WiFi.softAPIP());
     }
+#endif
 
     static bool _handlers_registered = false;
     if (_handlers_registered) return;
@@ -85,7 +87,10 @@ void WebConfigServer::begin(bool isAPMode) {
 
 
     // REST endpoints
-    server.on("/api/wifi/connect", HTTP_POST, guarded([this]() { handleConnect(); }));
+    // Ethernet build: no Wi-Fi settings, the route is not registered (404)
+    if (AppNetworkManager::hasWifi()) {
+        server.on("/api/wifi/connect", HTTP_POST, guarded([this]() { handleConnect(); }));
+    }
     server.on("/api/nut/config", HTTP_POST, guarded([this]() { handleNutConfig(); }));
     server.on("/api/logs", HTTP_GET, guarded([this]() { handleLogs(); }));
     server.on("/api/config", HTTP_GET, guarded([this]() { handleGetConfig(); }));
@@ -141,12 +146,14 @@ void WebConfigServer::begin(bool isAPMode) {
     // In AP il guard restituisce sempre ALLOW: il redirect captive resta invariato
     server.onNotFound([this]() {
         if (!authorize()) return;
+#if !NUT_NET_ETHERNET
         if (is_ap_mode && server.hostHeader() != WiFi.softAPIP().toString()) {
             server.sendHeader("Location", String("http://") + WiFi.softAPIP().toString() + "/", true);
             server.send(302, "text/plain", "");
-        } else {
-            server.send(404, "text/plain", "Not found");
+            return;
         }
+#endif
+        server.send(404, "text/plain", "Not found");
     });
 
     // Content-Type per requireJson (anti-CSRF), Cookie per la sessione (ADR 0009)
@@ -158,9 +165,11 @@ void WebConfigServer::begin(bool isAPMode) {
 }
 
 void WebConfigServer::loop() {
+#if !NUT_NET_ETHERNET
     if (is_ap_mode) {
         dnsServer.processNextRequest();
     }
+#endif
     server.handleClient();
 
     if (should_restart && (millis() - restart_request_time >= 1000)) {
@@ -174,6 +183,10 @@ void WebConfigServer::loop() {
 
 void WebConfigServer::setUPS(USBHostUPS* ups) {
     usb_ups = ups;
+}
+
+void WebConfigServer::setNetwork(const AppNetworkManager* net) {
+    network = net;
 }
 
 void WebConfigServer::handleConnect() {
@@ -267,6 +280,8 @@ void WebConfigServer::handleGetConfig() {
     JsonObject wifiObj = doc["wifi"].to<JsonObject>();
     wifiObj["ssid"] = config_mgr.getWifiConfig().ssid;
     wifiObj["mode"] = is_ap_mode ? "AP" : "STA";
+    // "ethernet": the UI hides the Wi-Fi tab and labels the link status "Ethernet"
+    doc["network"]["type"] = AppNetworkManager::hasWifi() ? "wifi" : "ethernet";
     
     JsonObject nutObj = doc["nut"].to<JsonObject>();
     nutObj["username"] = config_mgr.getNutConfig().username;
@@ -290,25 +305,18 @@ void WebConfigServer::handleSystemStatus() {
     JsonDocument doc;
     
     doc["version"] = FIRMWARE_VERSION;
-    uint8_t mac[6];
-    WiFi.macAddress(mac);
+    uint8_t mac[6] = {0};
+    if (network) network->macAddress(mac);
     char dev_id[32];
     // Lo standard convenzionale per i dispositivi ESP è usare la seconda metà del MAC (gli ultimi 3 byte)
     // poiché i primi 3 byte rappresentano l'OUI di Espressif.
     snprintf(dev_id, sizeof(dev_id), "%s-%02X%02X%02X", ESP.getChipModel(), mac[3], mac[4], mac[5]);
     doc["device_id"] = String(dev_id);
     
-    // Wi-Fi status
-    wl_status_t wifi_status = WiFi.status();
-    String wifi_status_str = "Disconnected";
-    if (is_ap_mode) {
-        wifi_status_str = "AP Mode Active";
-    } else if (wifi_status == WL_CONNECTED) {
-        wifi_status_str = WiFi.SSID();
-    } else {
-        wifi_status_str = "Connecting";
-    }
-    doc["wifi"]["status"] = wifi_status_str;
+    // Network status: kept under "wifi" for the UI and existing clients, the
+    // Ethernet build reports its IP and link speed there
+    doc["wifi"]["status"] = network ? network->statusText() : String("Disconnected");
+    doc["network"]["type"] = AppNetworkManager::hasWifi() ? "wifi" : "ethernet";
     
     // UPS status
     String ups_status_str = "Disconnected";

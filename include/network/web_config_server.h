@@ -12,6 +12,7 @@
 #include "LoginThrottle.h"
 #include "SessionTable.h"
 #include "network/auth_platform.h"
+#include "network/network_manager.h"
 
 class WebConfigServer {
 public:
@@ -19,6 +20,8 @@ public:
     void begin(bool isAPMode);
     void loop();
     void setUPS(USBHostUPS* ups);
+    // Link status and MAC address for /api/system-status
+    void setNetwork(const AppNetworkManager* net);
 
 private:
     WebServer server;
@@ -85,6 +88,7 @@ private:
     // millis() a UPLOAD_FILE_START: durata dell'upload nel log di successo (US-085)
     uint32_t ota_start_ms = 0;
     USBHostUPS* usb_ups = nullptr;
+    const AppNetworkManager* network = nullptr;
 };
 
 #endif // WEB_CONFIG_SERVER_H

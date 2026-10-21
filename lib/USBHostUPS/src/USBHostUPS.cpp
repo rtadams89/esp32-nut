@@ -54,6 +54,11 @@ bool USBHostUPS::begin() {
         .skip_phy_setup = false,
         .intr_flags = ESP_INTR_FLAG_LEVEL1,
     };
+#ifdef NUT_USB_PERIPHERAL_MAP
+    // Targets with two OTG controllers (ESP32-P4): 0 = default (High-Speed port),
+    // BIT0 = High-Speed, BIT1 = Full-Speed
+    host_config.peripheral_map = NUT_USB_PERIPHERAL_MAP;
+#endif
     esp_err_t err = usb_host_install(&host_config);
     if (err != ESP_OK && err != ESP_ERR_INVALID_STATE) {
         log("ERROR", "usb_host_install failed");
